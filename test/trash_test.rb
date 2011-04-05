@@ -58,5 +58,10 @@ class TrashTest < Test::Unit::TestCase
     entry.disable_trash { entry.destroy }
     assert_equal 0, Entry.deleted.count
   end
+  
+  def test_trashed
+    @entry.destroy
+    assert @entry.trashed?
+  end
 
 end

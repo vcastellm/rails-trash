@@ -47,6 +47,10 @@ module Trash
           @trash_is_disabled = save_val
         end
       end
+      
+      def trashed?
+        deleted_at.present?
+      end
 
     end
 
