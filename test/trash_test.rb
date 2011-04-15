@@ -2,6 +2,7 @@ require 'test/unit'
 require 'rubygems'
 require 'active_record'
 require 'trash'
+require 'factory_girl'
 
 ActiveRecord::Base.establish_connection(:adapter => "sqlite3", :database => ":memory:")
 
@@ -11,6 +12,13 @@ def setup_db
       create_table :entries do |t|
         t.string :title
         t.datetime :deleted_at
+      end
+
+      create_table :comments do |t|
+        t.string :email
+        t.text :body
+        t.datetime :deleted_at
+        t.integer :entry_id
       end
     end
   end
@@ -22,16 +30,45 @@ def teardown_db
   end
 end
 
+##
+# Model definitions
+#
+
 class Entry < ActiveRecord::Base
   default_scope where(:deleted_at => nil)
   has_trash
+  has_many :comments, :dependent => :destroy
 end
+
+class Comment < ActiveRecord::Base
+  default_scope where(:deleted_at => nil)
+  has_trash
+  belongs_to :entry
+end
+
+##
+# Factories
+#
+
+Factory.define :entry do |f|
+  f.sequence(:title) { |n| "Entry##{n}" }
+end
+
+Factory.define :comment do |f|
+  f.sequence(:email) { |n| "email+#{n}@example.com" }
+  f.association :entry
+end
+
+##
+# And finally the test itself.
+#
 
 class TrashTest < Test::Unit::TestCase
 
   def setup
     setup_db
-    @entry = Entry.create :title => "Hello World"
+    @entry = Factory(:entry)
+    @comment = Factory(:comment, :entry => @entry)
   end
 
   def teardown
@@ -40,28 +77,34 @@ class TrashTest < Test::Unit::TestCase
 
   def test_deleted
     @entry.destroy
-    assert_equal 0, Entry.count
-    assert_equal 1, Entry.deleted.count
+    assert Entry.count.eql?(0)
+    assert Entry.deleted.count.eql?(1)
   end
 
   def test_restore
     @entry.destroy
     Entry.deleted.first.restore
-    assert_equal 0, Entry.deleted.count
-    assert_equal 1, Entry.count
+    assert Entry.deleted.count.eql?(0)
+    assert Entry.count.eql?(1)
   end
 
   def test_wipe
     @entry.destroy
-    assert_equal 1, Entry.deleted.count
+    assert Entry.deleted.count.eql?(1)
     entry = Entry.deleted.first
     entry.disable_trash { entry.destroy }
-    assert_equal 0, Entry.deleted.count
+    assert Entry.deleted.count.eql?(0)
   end
   
   def test_trashed
     @entry.destroy
     assert @entry.trashed?
+  end
+
+  def test_destroy_in_cascade_still_works
+    assert Comment.count.eql?(1)
+    @entry.destroy
+    assert Comment.count.eql?(0)
   end
 
 end
